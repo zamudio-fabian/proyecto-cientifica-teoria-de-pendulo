@@ -4,11 +4,22 @@ import Vue from "vue";
 import "bootstrap/dist/css/bootstrap.css";
 import "bootstrap-vue/dist/bootstrap-vue.css";
 
+import numeral from "numeral";
+
 import { BContainer, BRow, BCol, BButton, BButtonGroup } from "bootstrap-vue";
+
+const STATE_RUN = 1;
+const STATE_STOP = 0;
 
 export default {
   name: "CientificaModule", // vue component name
-  components: { BContainer, BRow, BCol, BButton, BButtonGroup },
+  components: {
+    BContainer,
+    BRow,
+    BCol,
+    BButton,
+    BButtonGroup
+  },
 
   data() {
     return {
@@ -16,20 +27,26 @@ export default {
       context: null,
 
       timeList: [],
-      timeStart: null,
-      timeEnd: null,
+      timeStart: 0,
+      timeEnd: 0,
+      currentTime: 0,
+      currentTimeLoop: null,
+
+      initialAngle_r: -90,
+      initialLength_m: 1,
+      initialTimeStep_ms: 10,
 
       Angle: -90,
       Length_m: 1,
       timeStep_ms: 10,
 
-      runExperience: null
+      runExperience: null,
+
+      state: STATE_STOP
     };
   },
 
-  mounted() {
-    this.initPendulum();
-  },
+  mounted() {},
 
   methods: {
     PendulumSim: function(
@@ -57,19 +74,33 @@ export default {
       this.timeList.push(this.timeEnd - this.timeStart);
 
       this.stopExperience();
+      this.state = STATE_STOP;
+    },
+
+    runTime: function() {
+      if (this.currentTimeLoop == null) {
+        this.currentTimeLoop = setInterval(() => {
+          this.currentTime = this.currentTime + 1;
+        }, 1);
+      } else {
+        this.stopTime();
+      }
+    },
+
+    stopTime: function() {
+      clearInterval(this.currentTimeLoop);
+      this.currentTimeLoop = null;
+      this.currentTime = 0;
     },
 
     stopExperience: function() {
       clearInterval(this.runExperience);
     },
 
-    refreshExperience: function() {
-      clearInterval(this.runExperience);
-      this.initPendulum();
-    },
-
     initPendulum: function() {
       this.timeStart = new Date().getTime();
+
+      this.state = STATE_RUN;
 
       this.canvas = this.$refs["canvas"];
       this.context = this.canvas.getContext("2d");
@@ -77,10 +108,10 @@ export default {
       var prev = 0;
 
       var sim = this.PendulumSim(
-        this.Length_m,
+        this.initialLength_m,
         9.80665,
-        this.Angle,
-        this.timeStep_ms,
+        this.initialAngle_r,
+        this.initialTimeStep_ms,
         0.1,
         angle => {
           var rPend = Math.min(this.canvas.width, this.canvas.height) * 0.47;
@@ -115,15 +146,32 @@ export default {
           prev = angle;
         }
       );
+    },
+
+    buttonAction: function() {
+      if (this.state == STATE_RUN) {
+        this.countTime();
+        this.stopTime();
+      } else {
+        this.initPendulum();
+        this.runTime();
+      }
+    }
+  },
+
+  filters: {
+    time: function(value) {
+      value = value.toString();
+      return numeral(value).format("00:00:00");
     }
   }
 };
 </script>
 
 <template>
-  <b-container style="margin-top: 30px;">
-    <b-row class="justify-content-md-center">
-      <b-col col lg="3">
+  <b-container class="mt-5">
+    <b-row class>
+      <b-col col lg="2">
         <b-container>
           <h6>Datos:</h6>
           <span>
@@ -136,28 +184,45 @@ export default {
           </span>
         </b-container>
       </b-col>
-      <b-col col lg="6">
+      <b-col col lg="5">
         <b-container>
           <b-col col lg="12" class="justify-content-md-center">
             <canvas ref="canvas" width="470"></canvas>
           </b-col>
-          <b-col col lg="12" class="justify-content-md-center" style="text-align: center;">
-            <b-button-group>
-              <b-button variant="primary" @click="stopExperience">Detener Experiencia</b-button>
-              <b-button variant="primary" @click="refreshExperience">Reiniciar Experiencia</b-button>
-            </b-button-group>
+          <b-col col lg="12">
+            <p>
+              <strong>Pruebas</strong>
+            </p>
+            <ul id="example-1">
+              <li v-for="(item, index) in timeList">
+                <strong>Caso #{{index + 1}}</strong>
+                - {{ item | time }} minutos
+              </li>
+            </ul>
           </b-col>
         </b-container>
       </b-col>
-      <b-col col lg="3">
+      <b-col col lg="5">
         <b-container>
           <b-col col lg="12" class="justify-content-md-center">
-            <b-button block variant="primary" @click="countTime">Contar Tiempo</b-button>
-          </b-col>
-          <b-col col lg="12" class="justify-content-md-center">
-            <ul id="example-1">
-              <li v-for="item in timeList">{{ item / 1000 }} segundos</li>
-            </ul>
+            <b-container>
+              <b-col col lg="12" class="text-center mb-2">
+                <span id="time">{{ this.currentTime | time}} min</span>
+              </b-col>
+              <b-col col lg="12" class="mb-2">
+                <b-button
+                  block
+                  variant="primary"
+                  @click="buttonAction"
+                >{{this.state == 0 ? "INICIAR" : "CONTAR TIEMPO"}}</b-button>
+              </b-col>
+              <b-col col lg="12" class="justify-content-md-center">
+                <span>
+                  <strong>Descripción:</strong>
+                </span>
+                <p>Un péndulo físico o péndulo compuesto es cualquier cuerpo rígido que pueda oscilar libremente en el campo gravitatorio alrededor de un eje horizontal fijo, que no pasa por su centro de masa.</p>
+              </b-col>
+            </b-container>
           </b-col>
         </b-container>
       </b-col>
@@ -171,6 +236,12 @@ canvas {
   -moz-border-radius: 16px 16px 16px 16px;
   -webkit-border-radius: 16px 16px 16px 16px;
   border: 1px double #000000;
+}
+
+#time {
+  font-size: 30px;
+  font-weight: 400;
+  color: grey;
 }
 </style>
 
